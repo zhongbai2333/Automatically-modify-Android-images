@@ -58,6 +58,20 @@ jobs:
         echo "MANUF=$MANUF"   >> $GITHUB_ENV
         echo "IMEI=$IMEI"     >> $GITHUB_ENV
 
+    # 6. 构建原生 Linux x86_64 magiskboot
+    - name: 注入 Magisk
+      run: |
+        wget -O Magisk.zip \
+        https://github.com/topjohnwu/Magisk/releases/download/v29.0/Magisk-v29.0.apk
+        mkdir -p magisk
+        unzip -j Magisk.zip \
+        'lib/x86_64/libmagiskboot.so' \
+        'lib/x86_64/libmagiskinit.so' \
+        -d magisk/
+        mv magisk/libmagiskboot.so magisk/magiskboot
+        mv magisk/libmagiskinit.so magisk/magiskinit
+        chmod +x magisk/magiskboot magisk/magiskinit
+
     # 5. 修改 system.img 的 build.prop
     - name: 编辑镜像（使用 qemu-nbd）
       run: |
@@ -76,6 +90,9 @@ jobs:
         sudo sed -i "s/^persist\.radio\.imei=.*/persist.radio.imei=${IMEI}/" /mnt/img/build.prop
         sudo sed -i "s/^ro\.product\.model=.*/ro.product.model=${MODEL}/" /mnt/img/build.prop
         sudo sed -i "s/^ro\.product\.manufacturer=.*/ro.product.manufacturer=${MANUF}/" /mnt/img/build.prop
+        ./magisk/magiskboot --unpack /mnt/img/boot.img
+        cp magisk/magiskinit ramdisk/init || true
+        ./magisk/magiskboot --repack /mnt/img/boot.img
         # 卸载并断开
         sudo umount /mnt/img
         sudo fuser -v /dev/nbd0
@@ -85,44 +102,6 @@ jobs:
         sudo rmmod nbd || true
         rm -rf original/system.img
         img2simg raw-system.img original/system.img
-
-    # 6. 构建原生 Linux x86_64 magiskboot
-    - name: 注入 Magisk
-      run: |
-        wget -O Magisk.zip \
-        https://github.com/topjohnwu/Magisk/releases/download/v29.0/Magisk-v29.0.apk
-        mkdir -p magisk
-        unzip -j Magisk.zip \
-        'lib/x86_64/libmagiskboot.so' \
-        'lib/x86_64/libmagiskinit.so' \
-        -d magisk/
-        mv magisk/libmagiskboot.so magisk/magiskboot
-        mv magisk/libmagiskinit.so magisk/magiskinit
-        chmod +x magisk/magiskboot magisk/magiskinit
-
-    # 7. 注入 Magisk 到 boot.img
-    - name: 注入 Magisk 到 boot.img
-      run: |
-        # 提取 boot.img
-        guestfish --rw -a original/system.img <<EOF
-        run
-        mount /dev/sda1 /
-        download /boot.img boot.img
-        exit
-        EOF
-
-        # 打补丁
-        ./magisk/magiskboot --unpack boot.img
-        cp magisk/magiskinit ramdisk/init || true
-        ./magisk/magiskboot --repack boot.img
-
-        # 写回
-        guestfish --rw -a original/system.img <<EOF
-        run
-        mount /dev/sda1 /
-        upload boot.img /boot.img
-        exit
-        EOF
 
     # 8. 多线程 XZ 压缩并准备发布
     - name: 压缩为 XZ
