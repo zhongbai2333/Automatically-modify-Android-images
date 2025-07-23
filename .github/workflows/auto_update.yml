@@ -59,16 +59,23 @@ jobs:
         echo "IMEI=$IMEI"     >> $GITHUB_ENV
 
     # 5. 修改 system.img 的 build.prop
-    - name: 修改 Build.prop
-      env:
-        LIBGUESTFS_BACKEND_SETTINGS: force_tcg
+    - name: 编辑镜像（使用 qemu-nbd）
       run: |
-        virt-customize \
-          --format raw \
-          -a original/system.img \
-          --run-command "sed -i 's/^persist\\.radio\\.imei=.*/persist.radio.imei=${IMEI}/' /system/build.prop" \
-          --run-command "sed -i 's/^ro\\.product\\.model=.*/ro.product.model=${MODEL}/' /system/build.prop" \
-          --run-command "sed -i 's/^ro\\.product\\.manufacturer=.*/ro.product.manufacturer=${MANUF}/' /system/build.prop"
+        sudo apt-get update
+        sudo apt-get install -y qemu-utils           # 包含 qemu-nbd 
+        sudo modprobe nbd max_part=8                  # 加载 NBD 模块
+        sudo qemu-nbd --connect=/dev/nbd0 original/system.img
+        # 挂载第一个分区（通常是 nbd0p1）
+        sudo mkdir -p /mnt/img
+        sudo mount /dev/nbd0p1 /mnt/img
+        # 修改 build.prop
+        sudo sed -i "s/^persist\.radio\.imei=.*/persist.radio.imei=${IMEI}/" /mnt/img/system/build.prop
+        sudo sed -i "s/^ro\.product\.model=.*/ro.product.model=${MODEL}/" /mnt/img/system/build.prop
+        sudo sed -i "s/^ro\.product\.manufacturer=.*/ro.product.manufacturer=${MANUF}/" /mnt/img/system/build.prop
+        # 卸载并断开
+        sudo umount /mnt/img
+        sudo qemu-nbd --disconnect /dev/nbd0
+        sudo rmmod nbd
 
     # 6. 构建原生 Linux x86_64 magiskboot
     - name: 注入 Magisk
