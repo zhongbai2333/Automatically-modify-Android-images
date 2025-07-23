@@ -62,9 +62,13 @@ jobs:
     - name: 编辑镜像（使用 qemu-nbd）
       run: |
         sudo apt-get update
-        sudo apt-get install -y qemu-utils           # 包含 qemu-nbd 
+        sudo apt-get install -y qemu-utils snap       # 包含 qemu-nbd 
+        sudo snap install android-platform-tools
+        sudo snap alias android-platform-tools.simg2img simg2img
+        sudo snap alias android-platform-tools.img2simg img2simg
+        simg2img original/system.img raw-system.img
         sudo modprobe nbd max_part=8                  # 加载 NBD 模块
-        sudo qemu-nbd --format raw --connect=/dev/nbd0 original/system.img
+        sudo qemu-nbd --format raw --connect=/dev/nbd0 raw-system.img
         # 挂载第一个分区（通常是 nbd0p1）
         sudo mkdir -p /mnt/img
         sudo mount /dev/nbd0 /mnt/img
@@ -76,6 +80,8 @@ jobs:
         sudo umount /mnt/img
         sudo qemu-nbd --disconnect /dev/nbd0
         sudo rmmod nbd
+        rm -rf original/system.img
+        img2simg raw-system.img original/system.img
 
     # 6. 构建原生 Linux x86_64 magiskboot
     - name: 注入 Magisk
