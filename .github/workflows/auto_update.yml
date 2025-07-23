@@ -1,0 +1,88 @@
+name: Auto Update Android GSI with Magisk
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'    # 每周日 UTC 00:00 运行
+  workflow_dispatch:
+
+jobs:
+  update-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 下载最新 Release 附件
+        uses: actions/download-artifact@v4
+        with:
+          name: android-gsi
+          path: ./original
+
+      - name: 安装依赖工具
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libguestfs-tools unzip wget
+
+      - name: 生成随机设备属性
+        id: gen
+        run: |
+          # 随机生成 15 位 IMEI
+          IMEI="$(date +%s)"
+          echo "IMEI=$IMEI" >> $GITHUB_ENV
+
+          # 多机型列表与随机选择
+          MODELS=(Pixel_3 Pixel_4 Galaxy_S10 Galaxy_S20 OnePlus_7 OnePlus_8 Mi_9 Mi_10 Poco_F2 Redmi_Note_8)
+          count=${#MODELS[@]}
+          MODEL=${MODELS[RANDOM % count]}
+          echo "MODEL=$MODEL" >> $GITHUB_ENV
+
+          # 多厂商列表与随机选择
+          MANUFS=(Google Samsung OnePlus Xiaomi Poco)
+          count2=${#MANUFS[@]}
+          MANUF=${MANUFS[RANDOM % count2]}
+          echo "MANUF=$MANUF" >> $GITHUB_ENV
+
+      - name: 修改 system.img 中的设备属性
+        run: |
+          virt-customize \
+            --format raw \
+            -a original/system.img \
+            --run-command "sed -i 's/^persist\\.radio\\.imei=.*/persist.radio.imei=${IMEI}/' /system/build.prop" \
+            --run-command "sed -i 's/^ro\\.product\\.model=.*/ro.product.model=${MODEL}/' /system/build.prop" \
+            --run-command "sed -i 's/^ro\\.product\\.manufacturer=.*/ro.product.manufacturer=${MANUF}/' /system/build.prop"
+
+      - name: 下载并解压 Magisk
+        run: |
+          # 使用官方 ZIP 包含 magiskboot 与 magiskinit
+          wget -O Magisk.zip \
+            https://github.com/topjohnwu/Magisk/releases/download/v29.0/Magisk-v29.0.apk
+          unzip Magisk.zip magiskboot magiskinit -d magisk
+          chmod +x magisk/magiskboot magisk/magiskinit
+
+      - name: 提取、打补丁并写回 boot.img
+        run: |
+          # 从镜像中提取 boot.img（假设系统单分区，boot.img 位于根）
+          guestfish --rw -a original/system.img <<EOF
+          run
+          mount /dev/sda1 /
+          download /boot.img boot.img
+          exit
+          EOF
+
+          # 使用 magiskboot 注入 Magisk
+          ./magisk/magiskboot --unpack boot.img
+          cp magisk/magiskinit ramdisk/init
+          ./magisk/magiskboot --repack boot.img
+
+          # 上传补丁后的 boot.img 回镜像
+          guestfish --rw -a original/system.img <<EOF
+          run
+          mount /dev/sda1 /
+          upload boot.img /boot.img
+          exit
+          EOF
+
+      - name: 发布并上传新的 GSI
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: weekly-${{ github.run_number }}
+          name: GSI-with-Magisk-${{ github.run_number }}
+          files: |
+            original/system.img
