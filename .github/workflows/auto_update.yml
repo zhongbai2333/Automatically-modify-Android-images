@@ -3,100 +3,120 @@ name: Auto Update Android GSI with Magisk
 on:
   schedule:
     - cron: '0 0 * * 0'    # 每周日 UTC 00:00 运行
-  workflow_dispatch:       # 手动触发工作流
+  workflow_dispatch:      # 支持手动触发
 
 jobs:
   update-image:
     runs-on: ubuntu-latest
+
     steps:
-      # 1. 下载 v1.0.0 模板镜像 (已压缩为 .xz)
-      - name: 下载 v1.0.0 模板镜像
-        uses: robinraju/release-downloader@v1
-        with:
-          repository: ${{ github.repository }}
-          tag: 'v1.0.0'
-          fileName: 'system.img.xz'
+    # 1. 下载 v1.0.0 模板（压缩版）
+    - name: 下载 v1.0.0 模板镜像
+      uses: robinraju/release-downloader@v1
+      with:
+        repository: ${{ github.repository }}
+        tag: 'v1.0.0'
+        fileName: 'system.img.xz'
 
-      # 2. 解压镜像
-      - name: 解压模板镜像
-        run: |
-          mkdir -p original
-          xz -d system.img.xz
-          mv system.img original/system.img
+    # 2. 解压并准备原始镜像
+    - name: 解压模板镜像
+      run: |
+        mkdir -p original
+        xz -d system.img.xz
+        mv system.img original/system.img
 
-      # 3. 安装依赖工具
-      - name: 安装依赖
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libguestfs-tools \
-                                 unzip wget xz-utils
+    # 3. 安装 libguestfs & supermin 依赖
+    - name: 安装 GuestFS 及 Supermin 依赖
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libguestfs-tools supermin \
+          unzip wget xz-utils cmake pkg-config \
+          liblzma-dev liblz4-dev libbz2-dev zlib1g-dev \
+          clang rustc cargo ninja-build
+        # 确保内核镜像可读、更新 appliance 缓存
+        sudo chmod a+r /boot/vmlinuz-* || true
+        sudo update-guestfs-appliance
 
-      # 4. 生成随机设备属性
-      - name: 随机化设备属性
-        id: gen
-        run: |
-          IMEI="$(date +%s)"
-          echo "IMEI=$IMEI"   >> $GITHUB_ENV
-          MODELS=(Pixel_3 Pixel_4 Galaxy_S10 Galaxy_S20 OnePlus_7 OnePlus_8 Mi_9 Mi_10 Poco_F2 Redmi_Note_8)
-          MODEL=${MODELS[RANDOM % ${#MODELS[@]}]}
-          echo "MODEL=$MODEL" >> $GITHUB_ENV
-          MANUFS=(Google Samsung OnePlus Xiaomi Poco)
-          MANUF=${MANUFS[RANDOM % ${#MANUFS[@]}]}
-          echo "MANUF=$MANUF" >> $GITHUB_ENV
+    # 4. 随机化机型 ↔ 厂商对
+    - name: 随机化机型与厂商
+      id: gen_device
+      run: |
+        declare -A DEVICE_MAP=(
+          [Pixel_3]=Google   [Pixel_4]=Google
+          [Galaxy_S10]=Samsung [Galaxy_S20]=Samsung
+          [OnePlus_7]=OnePlus [OnePlus_8]=OnePlus
+          [Mi_9]=Xiaomi       [Mi_10]=Xiaomi
+          [Poco_F2]=Poco      [Redmi_Note_8]=Xiaomi
+        )
+        models=("${!DEVICE_MAP[@]}")
+        idx=$(( RANDOM % ${#models[@]} ))
+        MODEL="${models[$idx]}"
+        MANUF="${DEVICE_MAP[$MODEL]}"
+        IMEI="$(date +%s)"              # 以时间戳做简单 IMEI
+        echo "MODEL=$MODEL"   >> $GITHUB_ENV
+        echo "MANUF=$MANUF"   >> $GITHUB_ENV
+        echo "IMEI=$IMEI"     >> $GITHUB_ENV
 
-      # 5. 修改 system.img build.prop
-      - name: 修改 Build.prop
-        run: |
-          virt-customize \
-            --format raw \
-            -a original/system.img \
-            --run-command "sed -i 's/^persist\\.radio\\.imei=.*/persist.radio.imei=${IMEI}/' /system/build.prop" \
-            --run-command "sed -i 's/^ro\\.product\\.model=.*/ro.product.model=${MODEL}/' /system/build.prop" \
-            --run-command "sed -i 's/^ro\\.product\\.manufacturer=.*/ro.product.manufacturer=${MANUF}/' /system/build.prop"
+    # 5. 修改 system.img 的 build.prop
+    - name: 修改 Build.prop
+      run: |
+        virt-customize \
+          --format raw \
+          -a original/system.img \
+          --run-command "sed -i 's/^persist\\.radio\\.imei=.*/persist.radio.imei=${IMEI}/' /system/build.prop" \
+          --run-command "sed -i 's/^ro\\.product\\.model=.*/ro.product.model=${MODEL}/' /system/build.prop" \
+          --run-command "sed -i 's/^ro\\.product\\.manufacturer=.*/ro.product.manufacturer=${MANUF}/' /system/build.prop"
 
-      # 6. 下载并解压 Magisk
-      - name: 注入 Magisk
-        run: |
-          wget -O Magisk.zip \
-            https://github.com/topjohnwu/Magisk/releases/download/v29.0/Magisk-v29.0.apk
-          mkdir -p magisk
-          unzip -j Magisk.zip \
-            'lib/x86_64/libmagiskboot.so' \
-            'lib/x86_64/libmagiskinit.so' \
-            -d magisk/
-          mv magisk/libmagiskboot.so magisk/magiskboot
-          mv magisk/libmagiskinit.so magisk/magiskinit
-          chmod +x magisk/magiskboot magisk/magiskinit
+    # 6. 构建原生 Linux x86_64 magiskboot
+    - name: 注入 Magisk
+      run: |
+        wget -O Magisk.zip \
+        https://github.com/topjohnwu/Magisk/releases/download/v29.0/Magisk-v29.0.apk
+        mkdir -p magisk
+        unzip -j Magisk.zip \
+        'lib/x86_64/libmagiskboot.so' \
+        'lib/x86_64/libmagiskinit.so' \
+        -d magisk/
+        mv magisk/libmagiskboot.so magisk/magiskboot
+        mv magisk/libmagiskinit.so magisk/magiskinit
+        chmod +x magisk/magiskboot magisk/magiskinit
 
-      # 7. 补丁并写回 boot.img
-      - name: 注入 Magisk 到 boot.img
-        run: |
-          guestfish --rw -a original/system.img <<EOF
-          run
-          mount /dev/sda1 /
-          download /boot.img boot.img
-          exit
-          EOF
-          ./magisk/magiskboot --unpack boot.img
-          cp magisk/magiskinit ramdisk/init
-          ./magisk/magiskboot --repack boot.img
-          guestfish --rw -a original/system.img <<EOF
-          run
-          mount /dev/sda1 /
-          upload boot.img /boot.img
-          exit
-          EOF
+    # 7. 注入 Magisk 到 boot.img
+    - name: 注入 Magisk 到 boot.img
+      run: |
+        # 提取 boot.img
+        guestfish --rw -a original/system.img <<EOF
+        run
+        mount /dev/sda1 /
+        download /boot.img boot.img
+        exit
+        EOF
 
-      # 8. 压缩为 XZ 并发布 Release
-      - name: 压缩并发布新的 GSI
-        run: |
-          xz -T0 -z original/system.img
-          mv original/system.img.xz system.img.xz
+        # 打补丁
+        ./magisk/magiskboot --unpack boot.img
+        cp magisk/magiskinit ramdisk/init || true
+        ./magisk/magiskboot --repack boot.img
 
-      - name: 发布 Release 附件（XZ 格式）
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: weekly-${{ github.run_number }}
-          name: GSI-with-Magisk-${{ github.run_number }}
-          files: |
-            system.img.xz
+        # 写回
+        guestfish --rw -a original/system.img <<EOF
+        run
+        mount /dev/sda1 /
+        upload boot.img /boot.img
+        exit
+        EOF
+
+    # 8. 多线程 XZ 压缩并准备发布
+    - name: 压缩为 XZ
+      run: |
+        xz -T0 -z original/system.img
+        mv original/system.img.xz system.img.xz
+
+    # 9. 发布为新的 GitHub Release
+    - name: 发布 Release 附件（XZ 格式）
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: weekly-${{ github.run_number }}
+        name: GSI-with-Magisk-${{ github.run_number }}
+        files: |
+          system.img.xz
