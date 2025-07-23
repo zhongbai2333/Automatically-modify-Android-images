@@ -61,7 +61,7 @@ jobs:
     # 5. 修改 system.img 的 build.prop
     - name: 修改 Build.prop
       env:
-        LIBGUESTFS_BACKEND: direct
+        LIBGUESTFS_BACKEND_SETTINGS: force_tcg
       run: |
         virt-customize \
           --format raw \
