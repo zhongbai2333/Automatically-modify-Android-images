@@ -82,7 +82,7 @@ jobs:
         sudo fuser -k /dev/nbd0
         sudo qemu-nbd --disconnect /dev/nbd0
         sudo modprobe -r nbd
-        sudo rmmod nbd
+        sudo rmmod nbd || true
         rm -rf original/system.img
         img2simg raw-system.img original/system.img
 
