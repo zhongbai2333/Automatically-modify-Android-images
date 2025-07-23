@@ -3,6 +3,7 @@ name: Auto Update Android GSI with Magisk
 on:
   schedule:
     - cron: '0 0 * * 0'    # 每周日 UTC 00:00 运行
+  workflow_dispatch:       # 手动触发工作流
 
 jobs:
   update-image:
