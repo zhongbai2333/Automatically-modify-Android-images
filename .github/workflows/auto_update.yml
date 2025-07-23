@@ -64,7 +64,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y qemu-utils           # 包含 qemu-nbd 
         sudo modprobe nbd max_part=8                  # 加载 NBD 模块
-        sudo qemu-nbd --connect=/dev/nbd0 original/system.img
+        sudo qemu-nbd --format raw --connect=/dev/nbd0 original/system.img
         # 挂载第一个分区（通常是 nbd0p1）
         sudo mkdir -p /mnt/img
         sudo mount /dev/nbd0p1 /mnt/img
