@@ -36,7 +36,7 @@ jobs:
           clang rustc cargo ninja-build
         # 确保内核镜像可读、更新 appliance 缓存
         sudo chmod a+r /boot/vmlinuz-* || true
-        sudo update-guestfs-appliance
+        echo 'export LIBGUESTFS_BACKEND=direct' >> $GITHUB_ENV
 
     # 4. 随机化机型 ↔ 厂商对
     - name: 随机化机型与厂商
@@ -60,6 +60,8 @@ jobs:
 
     # 5. 修改 system.img 的 build.prop
     - name: 修改 Build.prop
+      env:
+        LIBGUESTFS_BACKEND: direct
       run: |
         virt-customize \
           --format raw \
