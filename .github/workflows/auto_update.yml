@@ -67,7 +67,7 @@ jobs:
         sudo qemu-nbd --format raw --connect=/dev/nbd0 original/system.img
         # 挂载第一个分区（通常是 nbd0p1）
         sudo mkdir -p /mnt/img
-        sudo mount /dev/nbd0p1 /mnt/img
+        sudo mount /dev/nbd0 /mnt/img
         # 修改 build.prop
         sudo sed -i "s/^persist\.radio\.imei=.*/persist.radio.imei=${IMEI}/" /mnt/img/system/build.prop
         sudo sed -i "s/^ro\.product\.model=.*/ro.product.model=${MODEL}/" /mnt/img/system/build.prop
