@@ -73,9 +73,10 @@ jobs:
         sudo mkdir -p /mnt/img
         sudo mount /dev/nbd0 /mnt/img
         # 修改 build.prop
-        sudo sed -i "s/^persist\.radio\.imei=.*/persist.radio.imei=${IMEI}/" /mnt/img/system/build.prop
-        sudo sed -i "s/^ro\.product\.model=.*/ro.product.model=${MODEL}/" /mnt/img/system/build.prop
-        sudo sed -i "s/^ro\.product\.manufacturer=.*/ro.product.manufacturer=${MANUF}/" /mnt/img/system/build.prop
+        ls /mnt/img
+        sudo sed -i "s/^persist\.radio\.imei=.*/persist.radio.imei=${IMEI}/" /mnt/img/build.prop
+        sudo sed -i "s/^ro\.product\.model=.*/ro.product.model=${MODEL}/" /mnt/img/build.prop
+        sudo sed -i "s/^ro\.product\.manufacturer=.*/ro.product.manufacturer=${MANUF}/" /mnt/img/build.prop
         # 卸载并断开
         sudo umount /mnt/img
         sudo qemu-nbd --disconnect /dev/nbd0
