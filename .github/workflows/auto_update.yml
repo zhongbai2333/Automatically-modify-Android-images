@@ -11,14 +11,20 @@ jobs:
 
     steps:
     # 1. 下载 v1.0.0 模板（压缩版）
-    - name: 下载 v1.0.0 模板镜像
+    - name: 下载 v1.0.0 模板镜像 System
       uses: robinraju/release-downloader@v1
       with:
         repository: ${{ github.repository }}
         tag: 'v1.0.0'
-        fileName: |
-          'system.img.xz'
-          'boot.img.xz'
+        fileName: 'system.img.xz'
+    
+    - name: 下载 v1.0.0 模板镜像 Boot
+      uses: robinraju/release-downloader@v1
+      with:
+        repository: ${{ github.repository }}
+        tag: 'v1.0.0'
+        fileName: 'boot.img.xz'
+          
 
     # 2. 解压并准备原始镜像
     - name: 解压模板镜像
