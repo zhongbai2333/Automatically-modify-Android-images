@@ -113,9 +113,9 @@ jobs:
     # 7. 注入 Magisk
     - name: 注入 Magisk 到 boot.img
       run: |
-        ./magisk/magiskboot --unpack original/system/boot.img
+        ./magisk/magiskboot --unpack original/boot.img
         cp magisk/magiskinit ramdisk/init || true
-        ./magisk/magiskboot --repack original/system/boot.img
+        ./magisk/magiskboot --repack original/boot.img
 
     # 8. 多线程 XZ 压缩并准备发布
     - name: 压缩为 XZ
