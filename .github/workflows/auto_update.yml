@@ -114,7 +114,13 @@ jobs:
     - name: 注入 Magisk 到 boot.img
       run: |
         ./magisk/magiskboot --unpack original/boot.img
-        cp magisk/magiskinit ramdisk/init || true
+        mkdir ramdisk
+        cd ramdisk
+        gzip -dc ../ramdisk.cpio | cpio -i
+        cp ../magisk/magiskinit init || true
+        find . | cpio -o -H newc | gzip > ../new_ramdisk.cpio
+        cd ..
+        mv new_ramdisk.cpio ramdisk.cpio
         ./magisk/magiskboot --repack original/boot.img
 
     # 8. 多线程 XZ 压缩并准备发布
