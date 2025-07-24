@@ -1,4 +1,4 @@
-name: Auto Update Android GSI with Magisk
+name: Auto Update Android GSI
 
 on:
   schedule:
@@ -18,21 +18,12 @@ jobs:
         tag: 'v1.0.0'
         fileName: 'system.img.xz'
     
-    - name: 下载 v1.0.0 模板镜像 Boot
-      uses: robinraju/release-downloader@v1
-      with:
-        repository: ${{ github.repository }}
-        tag: 'v1.0.0'
-        fileName: 'boot.img.xz'
-    
     # 2. 解压并准备原始镜像
     - name: 解压模板镜像
       run: |
         mkdir -p original
         xz -d system.img.xz
-        xz -d boot.img.xz
         mv system.img original/system.img
-        mv boot.img original/boot.img
 
     # 3. 安装必要的系统依赖
     - name: 安装系统依赖
@@ -85,44 +76,13 @@ jobs:
         sudo qemu-nbd --disconnect /dev/nbd0
         sudo modprobe -r nbd
         sudo rmmod nbd || true
-        rm -rf original/system.img
-        img2simg raw-system.img original/system.img
-    
-    # 6. 构建原生 Linux x86_64 magiskboot
-    - name: 注入 Magisk
-      run: |
-        wget -O Magisk.zip \
-        https://github.com/topjohnwu/Magisk/releases/download/v29.0/Magisk-v29.0.apk
-        mkdir -p magisk
-        unzip -j Magisk.zip \
-        'lib/x86_64/libmagiskboot.so' \
-        'lib/x86_64/libmagiskinit.so' \
-        -d magisk/
-        mv magisk/libmagiskboot.so magisk/magiskboot
-        mv magisk/libmagiskinit.so magisk/magiskinit
-        chmod +x magisk/magiskboot magisk/magiskinit
-
-    # 7. 注入 Magisk
-    - name: 注入 Magisk 到 boot.img
-      run: |
-        ./magisk/magiskboot --unpack original/boot.img
-        mkdir ramdisk
-        cd ramdisk
-        cpio -idmv < ../ramdisk.cpio 
-        cp ../magisk/magiskinit init || true
-        find . | cpio -o -H newc | gzip > ../new_ramdisk.cpio
-        cd ..
-        mv new_ramdisk.cpio ramdisk.cpio
-        ./magisk/magiskboot --repack original/boot.img
-        mv new-boot.img original/boot.img
+        mv raw-system.img original/system.img
 
     # 8. 多线程 XZ 压缩并准备发布
     - name: 压缩为 XZ
       run: |
         xz -T0 -z original/system.img
-        xz -T0 -z original/boot.img
         mv original/system.img.xz system.img.xz
-        mv original/boot.img.xz boot.img.xz
 
     # 9. 发布为新的 GitHub Release
     - name: 发布 Release 附件（XZ 格式）
@@ -132,4 +92,3 @@ jobs:
         name: GSI-with-Magisk-${{ github.run_number }}
         files: |
           system.img.xz
-          boot.img.xz
