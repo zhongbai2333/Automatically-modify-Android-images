@@ -122,7 +122,7 @@ jobs:
         cd ..
         mv new_ramdisk.cpio ramdisk.cpio
         ./magisk/magiskboot --repack original/boot.img
-        mv new_boot.img original/boot.img
+        mv new-boot.img original/boot.img
 
     # 8. 多线程 XZ 压缩并准备发布
     - name: 压缩为 XZ
