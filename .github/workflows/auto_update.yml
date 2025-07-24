@@ -43,7 +43,7 @@ jobs:
         unzip wget xz-utils cmake pkg-config \
         liblzma-dev liblz4-dev libbz2-dev zlib1g-dev \
         clang rustc cargo ninja-build
-        sudo apt-get install -y android-tools-fsutils android-tools-adb
+        sudo apt-get install -y android-sdk-libsparse-utils android-tools-adb
 
     # 4. 随机化机型 ↔ 厂商对
     - name: 随机化机型与厂商
