@@ -116,7 +116,7 @@ jobs:
         ./magisk/magiskboot --unpack original/boot.img
         mkdir ramdisk
         cd ramdisk
-        gzip -dc ../ramdisk.cpio | cpio -i
+        cpio -idmv < ../ramdisk.cpio 
         cp ../magisk/magiskinit init || true
         find . | cpio -o -H newc | gzip > ../new_ramdisk.cpio
         cd ..
